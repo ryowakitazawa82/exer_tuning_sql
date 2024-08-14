@@ -12,7 +12,7 @@ docker-compose up -d
 docker exec -it mysql-container bash
 ```
 
-3. mysql に接続
+3. MySQL に接続
 
 ```
 mysql -u root -p # パスワードはroot
@@ -21,4 +21,10 @@ mysql -u root -p # パスワードはroot
 4. 後はdemoデータベースを自由に操作
 ```
 use demo;
+```
+
+## Tips
+### MySQLの実行結果を見る
+```
+EXPLAIN {クエリ}
 ```
