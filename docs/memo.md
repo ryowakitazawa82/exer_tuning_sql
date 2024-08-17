@@ -1,21 +1,26 @@
-## 3章
+## 3 章
+
 ### まとめ
-- SQLパフォーマンスはストレージへのI/Oをどれだけ減らせるか
-- UNIONで条件分岐を表現したくなったら、冗長になっていないかを診断する
-- INやCASE式で条件分岐を表現できれば、テーブルへのスキャンを大幅に減らせる可能性がある
+
+- SQL パフォーマンスはストレージへの I/O をどれだけ減らせるか
+- UNION で条件分岐を表現したくなったら、冗長になっていないかを診断する
+- IN や CASE 式で条件分岐を表現できれば、テーブルへのスキャンを大幅に減らせる可能性がある
 - そのためにも、文から式へのパラダイムシフトを取得するべき
 
+## 4 章
 
-## 4章
 ### まとめ
-- GROUP BY句やウィンドウ関数のPARTITION BY句は集合のカットをしている
-- GROUP BY句やウィンドウ関数は内部的にハッシュまたはソートの処理が実行されている
+
+- GROUP BY 句やウィンドウ関数の PARTITION BY 句は集合のカットをしている
+- GROUP BY 句やウィンドウ関数は内部的にハッシュまたはソートの処理が実行されている
 - ハッシュやソートはメモリを多く使用する
   - もしメモリが不足した場合は一時領域としてストレージが使用され、パフォーマンスに問題を引き起こす
-- GROUP BY句やウィンドウ関数とCASE式を組み合わせると非常に強力な表現力を持つ
+- GROUP BY 句やウィンドウ関数と CASE 式を組み合わせると非常に強力な表現力を持つ
 
 ### 演習問題
+
 **問題**
+
 ```
 # リスト4.8 頭文字のアルファベットごとに何人がテーブルに存在するか集計するSQL
 SELECT SUBSTRING(name, 1, 1) AS label,
@@ -23,24 +28,92 @@ SELECT SUBSTRING(name, 1, 1) AS label,
   FROM Persons
  GROUP BY SUBSTRING(name, 1, 1);
 ```
-上記のSQLについて、DBMSにおける実行計画を取得して、GROUP BY・集約関数の演算にソートとハッシュのどちらが使用されているか調べろ。
+
+上記の SQL について、DBMS における実行計画を取得して、GROUP BY・集約関数の演算にソートとハッシュのどちらが使用されているか調べろ。
 
 **回答**
 
-EXPLAINの結果。
+EXPLAIN の結果。
+
 ```
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	Persons	NULL	index	PRIMARY	PRIMARY	34	NULL	9	100.00	Using index; Using temporary
 ```
-Using temporaryなのでどちらも使用していない？
-書籍では`filter sort`が使われるとある。差異が出る理由↓
 
-> まず、「EXPLAIN」の結果は、MySQLがクエリをどのように実行するかの「予測」を示しているんだ。この予測はMySQLのクエリオプティマイザによって作られるんだけど、そのオプティマイザはテーブルの統計情報（行数、インデックスの状態など）を基にしてクエリの最適な実行計画を決定するんだ。
-だから、実行計画は以下のような要素によって変わる可能性があるよ。
+Using temporary なのでどちらも使用していない？
+書籍では`filter sort`が使われるとある。差異が出る理由 ↓
+
+> まず、「EXPLAIN」の結果は、MySQL がクエリをどのように実行するかの「予測」を示しているんだ。この予測は MySQL のクエリオプティマイザによって作られるんだけど、そのオプティマイザはテーブルの統計情報（行数、インデックスの状態など）を基にしてクエリの最適な実行計画を決定するんだ。
+> だから、実行計画は以下のような要素によって変わる可能性があるよ。
+>
 > 1. テーブルのデータ量
 > 2. 使用するインデックスの種類や状態
 > 3. クエリの構造
-> 4. MySQLの設定（例えば、バッファプールのサイズなど）
-> そのため、書籍の例と実際の結果が異なる場合、それらの要素の違いが影響している可能性があるんだ。
-ただし、「Using index; Using temporary」が表示されるということは、MySQLが一時テーブルを使ってクエリを実行していることを示しているよ。これは、GROUP BY句があるために、MySQLがデータを一時的に保存する必要があるからだね。
-なお、「filesort」が表示されないということは、MySQLがソート操作を行っていない、もしくはインデックスを使ってソート操作を行っていることを示しているよ。これは、クエリの構造や使用するインデックス、MySQLの設定などによって変わるんだ。
+> 4. MySQL の設定（例えば、バッファプールのサイズなど）
+>    そのため、書籍の例と実際の結果が異なる場合、それらの要素の違いが影響している可能性があるんだ。
+>    ただし、「Using index; Using temporary」が表示されるということは、MySQL が一時テーブルを使ってクエリを実行していることを示しているよ。これは、GROUP BY 句があるために、MySQL がデータを一時的に保存する必要があるからだね。
+>    なお、「filesort」が表示されないということは、MySQL がソート操作を行っていない、もしくはインデックスを使ってソート操作を行っていることを示しているよ。これは、クエリの構造や使用するインデックス、MySQL の設定などによって変わるんだ。
+
+## 5 章
+
+### 演習問題
+
+下記と同値な SQL 文を相関サブクエリを使って作ってください。
+
+```
+■リスト5.3 ウィンドウ関数を使った解
+INSERT INTO Sales2
+SELECT company,
+       year,
+       sale,
+       CASE SIGN(sale - MAX(sale)
+                         OVER ( PARTITION BY company
+                                    ORDER BY year
+                                     ROWS BETWEEN 1 PRECEDING
+                                              AND 1 PRECEDING) )
+       WHEN 0 THEN '='
+       WHEN 1 THEN '+'
+       WHEN -1 THEN '-'
+       ELSE NULL END AS var
+  FROM Sales;
+```
+
+> ※相関クエリとは？
+>
+> 相関クエリは、外側のクエリと内側のサブクエリが相互に関連する SQL のクエリのこと。サブクエリの結果は外側のクエリの各行に影響を与える。つまり、外側のクエリが行を一つずつ処理するたびに、サブクエリもそれに合わせて実行される。
+
+**回答**
+
+```
+SELECT
+    company,
+    year,
+    sale,
+    CASE
+        WHEN sale - (
+            SELECT sale
+            FROM Sales S2
+            WHERE S1.company = S2.company
+            AND year = (
+                SELECT MAX(year)
+                FROM Sales S3
+                WHERE S1.company = S3.company
+                AND S1.year > S3.year
+            )
+        ) > 0 THEN '+'
+        WHEN sale - (
+            SELECT sale
+            FROM Sales S2
+            WHERE S1.company = S2.company
+            AND year = (
+                SELECT MAX(year)
+                FROM Sales S3
+                WHERE S1.company = S3.company
+                AND S1.year > S3.year
+            )
+        ) < 0 THEN '-'
+        ELSE '='
+    END AS var
+FROM Sales S1;
+
+```
